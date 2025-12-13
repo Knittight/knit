@@ -205,11 +205,23 @@ def cmd_install(repo_name, is_dependency=False):
         # Check if there's a /src directory and copy its contents
         src_dir = repo_path / "src"
         if src_dir.exists() and src_dir.is_dir():
-            print(f"{prefix}  Copying files from /src...")
+            print(f"{prefix}Copying files from /src...")
             for item in src_dir.iterdir():
                 dest = repo_path / item.name
                 if item.is_file():
                     shutil.copy2(item, dest)
+                    
+                    # Make executable and symlink to /usr/local/bin
+                    os.chmod(dest, 0o755)  # Make it executable
+                    bin_link = Path("/usr/local/bin") / item.name
+                    try:
+                        if bin_link.exists() or bin_link.is_symlink():
+                            bin_link.unlink()
+                        bin_link.symlink_to(dest)
+                        print(f"{prefix}Linked {item.name} to /usr/local/bin")
+                    except Exception as e:
+                        print(f"{prefix}Could not link {item.name}: {e}")
+                        
                 elif item.is_dir():
                     if dest.exists():
                         shutil.rmtree(dest)
