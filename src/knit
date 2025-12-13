@@ -266,8 +266,18 @@ def cmd_delete(repo_name):
     """Delete an installed repo and its symlink"""
     knit_path = Path(KNIT_DIR)
     repo_path = knit_path / repo_name
+    
     symlink_path = Path("/usr/local/bin") / repo_name
+    
+    # Prevent self-deletion
+    current_exec = Path(sys.argv[0]).resolve()
+    knit_exec = Path("/usr/local/bin/knit").resolve()
 
+    if repo_name == "knit" and current_exec == knit_exec:
+        print("Refusing to delete knit while it is running.")
+        print("If you really want to remove knit, uninstall it manually.")
+        return
+    
     if not repo_path.exists():
         print(f"{repo_name} is not installed")
         return
