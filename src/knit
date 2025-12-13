@@ -379,7 +379,15 @@ def cmd_update():
                 print(f"Failed to replace knit binary: {e}")
                 print("You may need to run with sudo")
                 os.remove(temp_file)
-    
+                # build step
+                build_sh = repo_path / "build.sh"
+                makefile = repo_path / "Makefile"
+
+                if build_sh.exists():
+                    subprocess.run(["sh", "build.sh"], cwd=repo_path, check=True)
+                elif makefile.exists():
+                    subprocess.run(["make"], cwd=repo_path, check=True)
+        
     except urllib.error.URLError as e:
         print(f"Failed to check for updates: {e}")
     except Exception as e:
