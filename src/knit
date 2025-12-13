@@ -287,8 +287,14 @@ def cmd_delete(repo_name):
         # Remove symlink if it exists and is a symlink
         if symlink_path.exists() or symlink_path.is_symlink():
             if symlink_path.is_symlink():
-                symlink_path.unlink()
-                print(f"Removed symlink @ /usr/local/bin/{repo_name}")
+                try:
+                    symlink_path.unlink()
+                    print(f"Removed symlink /usr/local/bin/{repo_name}")
+                except PermissionError:
+                    print(
+                        f"Permission denied removing /usr/local/bin/{repo_name}\n"
+                        f"Try running: sudo knit delete {repo_name}"
+                    )
             else:
                 print(
                     f"Warning: /usr/local/bin/{repo_name} exists but is not a symlink, not removing"
