@@ -51,6 +51,22 @@ def get_package_metadata(repo_path):
     except:
         return None
 
+def get_remote_metadata(repo_name):
+    """Fetch desc.knit from GitHub for uninstalled packages"""
+    desc_url = f"https://raw.githubusercontent.com/{GITHUB_ORG}/{repo_name}/main/desc.knit"
+    
+    try:
+        with urllib.request.urlopen(desc_url) as response:
+            return json.loads(response.read().decode())
+    except:
+        # Try master branch if main doesn't exist
+        try:
+            desc_url = f"https://raw.githubusercontent.com/{GITHUB_ORG}/{repo_name}/master/desc.knit"
+            with urllib.request.urlopen(desc_url) as response:
+                return json.loads(response.read().decode())
+        except:
+            return None
+
 def cmd_list(installed_only=False):
     """List all Knittight repos and their installed versions"""
     knit_path = Path(KNIT_DIR)
@@ -113,9 +129,13 @@ def cmd_list(installed_only=False):
                         print(f"  Owner: {metadata['owner']}")
             else:
                 print(f"\n{name:30}   not installed")
-                # Try to fetch description from GitHub API
-                if repo.get('description'):
-                    print(f"  Description: {repo['description']}")
+                # Fetch desc.knit from GitHub
+                metadata = get_remote_metadata(name)
+                if metadata:
+                    if metadata.get('description'):
+                        print(f"  Description: {metadata['description']}")
+                    if metadata.get('owner'):
+                        print(f"  Owner: {metadata['owner']}")
 
 def install_dependencies(repo_path):
     """Install dependencies for a package"""
