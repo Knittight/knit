@@ -12,6 +12,7 @@ GITHUB_ORG = "Knittight"
 KNIT_DIR = "/.knittight"
 GITHUB_API = f"https://api.github.com/orgs/{GITHUB_ORG}/repos"
 KNIT_RELEASES_API = "https://api.github.com/repos/Knittight/knit/releases/latest"
+KNIT_VERSION = "1.0.0"
 
 def get_repos():
     """Fetch all repos from the Knittight organization"""
@@ -134,6 +135,11 @@ def cmd_list(installed_only=False):
                         print(f"  Owner: {metadata['owner']}")
                     if metadata.get('version'):
                         print(f"  Version: {metadata['version']}")
+
+def cmd_version():
+    """Print the current version of knit"""
+    print(f"knit version {KNIT_VERSION}")
+
 
 def install_dependencies(repo_path):
     """Install dependencies for a package"""
@@ -337,6 +343,7 @@ Usage:
     knit delete <repo>       Delete an installed repo
     knit update              Update knit package manager to latest release
     knit help                Show this help message
+    knit --version/version   Show knit version
 
 Examples:
     sudo knit init           # Only needed once
@@ -377,6 +384,8 @@ def main():
             print("Please specify a repo name: knit delete <repo>")
         else:
             cmd_delete(sys.argv[2])
+    elif cmd == "version", "--version":
+        cmd_version()
     elif cmd == "help":
         print_help()
     else:
