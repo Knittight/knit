@@ -1,0 +1,7 @@
+{
+  "name": "Knit",
+  "version": "1.0.0",
+  "description": "package manager for Knittight [github] repositories",
+  "owner": "Knittight",
+  "dependencies": []
+}
