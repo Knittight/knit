@@ -238,6 +238,15 @@ def cmd_install(repo_name, is_dependency=False):
         version = get_repo_version(repo_path)
         print(f"{prefix}✓ Installed {repo_name} (v{version})")
         
+        # build step
+        build_sh = repo_path / "build.sh"
+        makefile = repo_path / "Makefile"
+
+        if build_sh.exists():
+            subprocess.run(["sh", "build.sh"], cwd=repo_path, check=True)
+        elif makefile.exists():
+            subprocess.run(["make"], cwd=repo_path, check=True)
+        
         # Install dependencies after successful install
         if not is_dependency:
             install_dependencies(repo_path)
