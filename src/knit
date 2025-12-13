@@ -263,25 +263,39 @@ def cmd_install(repo_name, is_dependency=False):
         print(f"{prefix}Make sure the repo exists at {repo_url}")
 
 def cmd_delete(repo_name):
-    """Delete an installed repo"""
+    """Delete an installed repo and its symlink"""
     knit_path = Path(KNIT_DIR)
     repo_path = knit_path / repo_name
-    
+    symlink_path = Path("/usr/local/bin") / repo_name
+
     if not repo_path.exists():
-        print(f" {repo_name} is not installed")
+        print(f"{repo_name} is not installed")
         return
-    
+
     print(f"Are you sure you want to delete {repo_name}? (y/n): ", end="")
-    response = input()
-    
-    if response.lower() == 'y':
-        try:
-            shutil.rmtree(repo_path)
-            print(f"Deleted {repo_name}")
-        except Exception as e:
-            print(f"Failed to delete {repo_name}: {e}")
-    else:
+    response = input().strip().lower()
+
+    if response != "y":
         print("Cancelled")
+        return
+
+    try:
+        # Remove repo directory
+        shutil.rmtree(repo_path)
+        print(f"Deleted repo {repo_name}")
+
+        # Remove symlink if it exists and is a symlink
+        if symlink_path.exists() or symlink_path.is_symlink():
+            if symlink_path.is_symlink():
+                symlink_path.unlink()
+                print(f"Removed symlink @ /usr/local/bin/{repo_name}")
+            else:
+                print(
+                    f"Warning: /usr/local/bin/{repo_name} exists but is not a symlink, not removing"
+                )
+
+    except Exception as e:
+        print(f"Failed to delete {repo_name}: {e}")
 
 def cmd_init():
     """Initialize .knittight directory in root with proper permissions"""
