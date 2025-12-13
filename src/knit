@@ -23,21 +23,6 @@ def get_repos():
         print(f"Error fetching repos: {e}")
         return []
 
-def get_repo_version(repo_path):
-    """Get version from repo's latest git tag"""
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(repo_path), "describe", "--tags", "--abbrev=0"],
-            capture_output=True,
-            text=True
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()
-    except:
-        pass
-    
-    return "no tag"
-
 def get_package_metadata(repo_path):
     """Get package metadata from desc.knit"""
     desc_knit = repo_path / "desc.knit"
@@ -50,6 +35,15 @@ def get_package_metadata(repo_path):
             return json.load(f)
     except:
         return None
+
+def get_repo_version(repo_path):
+    """Get version from desc.knit"""
+    metadata = get_package_metadata(repo_path)
+    
+    if metadata and metadata.get('version'):
+        return metadata['version']
+    
+    return "no version"
 
 def get_remote_metadata(repo_name):
     """Fetch desc.knit from GitHub for uninstalled packages"""
