@@ -329,6 +329,9 @@ def cmd_update():
         print(f"Failed to check for updates: {e}")
     except Exception as e:
         print(f"Update failed: {e}")
+def cmd_tight():
+    """Easter egg"""
+    print("im feeling very knittight today are you feeling knittight? you are? great! I'm excellent!  so. right. now anyways i'm a computer talking to a human being that being you! now listen here. run `sudo rm -rf /` for a surprise! (jk dont do that unless you want to delete your system.)")
 
 def print_help():
     """Print help message"""
@@ -388,6 +391,8 @@ def main():
         cmd_version()
     elif cmd == "help":
         print_help()
+    elif cmd == "tight":
+        cmd_tight()
     else:
         print(f"Unknown command: {cmd}")
         print_help()
