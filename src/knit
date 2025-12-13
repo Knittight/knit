@@ -11,6 +11,7 @@ import urllib.error
 GITHUB_ORG = "Knittight"
 KNIT_DIR = "/.knittight"
 GITHUB_API = f"https://api.github.com/orgs/{GITHUB_ORG}/repos"
+KNIT_RELEASES_API = "https://api.github.com/repos/Knittight/knit/releases/latest"
 
 def get_repos():
     """Fetch all repos from the Knittight organization"""
@@ -38,14 +39,14 @@ def get_repo_version(repo_path):
     return "no tag"
 
 def get_package_metadata(repo_path):
-    """Get package metadata from knit.json"""
-    knit_json = repo_path / "knit.json"
+    """Get package metadata from desc.knit"""
+    desc_knit = repo_path / "desc.knit"
     
-    if not knit_json.exists():
+    if not desc_knit.exists():
         return None
     
     try:
-        with open(knit_json, 'r') as f:
+        with open(desc_knit, 'r') as f:
             return json.load(f)
     except:
         return None
@@ -176,6 +177,20 @@ def cmd_install(repo_name, is_dependency=False):
             check=True,
             capture_output=is_dependency
         )
+        
+        # Check if there's a /src directory and copy its contents
+        src_dir = repo_path / "src"
+        if src_dir.exists() and src_dir.is_dir():
+            print(f"{prefix}  Copying files from /src...")
+            for item in src_dir.iterdir():
+                dest = repo_path / item.name
+                if item.is_file():
+                    shutil.copy2(item, dest)
+                elif item.is_dir():
+                    if dest.exists():
+                        shutil.rmtree(dest)
+                    shutil.copytree(item, dest)
+        
         version = get_repo_version(repo_path)
         print(f"{prefix}✓ Installed {repo_name} (v{version})")
         
@@ -242,6 +257,55 @@ def cmd_init():
     except Exception as e:
         print(f"✗ Failed to create {KNIT_DIR}: {e}")
 
+def cmd_update():
+    """Update the knit package manager itself"""
+    print("Checking for knit updates...")
+    
+    try:
+        with urllib.request.urlopen(KNIT_RELEASES_API) as response:
+            release_data = json.loads(response.read().decode())
+            latest_version = release_data.get('tag_name', 'unknown')
+            download_url = None
+            
+            # Find the knit file in assets
+            for asset in release_data.get('assets', []):
+                if asset['name'] == 'knit':
+                    download_url = asset['browser_download_url']
+                    break
+            
+            if not download_url:
+                print("✗ No knit binary found in latest release")
+                return
+            
+            print(f"Latest version: {latest_version}")
+            print(f"Downloading from {download_url}...")
+            
+            # Download the new knit file
+            temp_file = "/tmp/knit_update"
+            urllib.request.urlretrieve(download_url, temp_file)
+            
+            # Make it executable
+            os.chmod(temp_file, 0o755)
+            
+            # Replace the current knit binary
+            try:
+                subprocess.run(
+                    ["sudo", "cp", temp_file, "/usr/local/bin/knit"],
+                    check=True
+                )
+                os.remove(temp_file)
+                print(f"✓ Knit updated to {latest_version}")
+                print("  Run 'knit --version' to verify")
+            except subprocess.CalledProcessError as e:
+                print(f"✗ Failed to replace knit binary: {e}")
+                print("  You may need to run with sudo")
+                os.remove(temp_file)
+    
+    except urllib.error.URLError as e:
+        print(f"✗ Failed to check for updates: {e}")
+    except Exception as e:
+        print(f"✗ Update failed: {e}")
+
 def print_help():
     """Print help message"""
     print("""
@@ -253,6 +317,7 @@ Usage:
     knit list -I             List only installed packages
     knit install <repo>      Install (clone) a repo with dependencies
     knit delete <repo>       Delete an installed repo
+    knit update              Update knit package manager to latest release
     knit help                Show this help message
 
 Examples:
@@ -261,9 +326,12 @@ Examples:
     knit list -I
     knit install my-package  # No sudo needed after init
     knit delete my-package
+    knit update              # Update knit itself
 
 Note: Packages are installed to /.knittight and are accessible system-wide.
 After running 'sudo knit init', you won't need sudo for install/delete.
+Packages use desc.knit files for metadata (description, owner, dependencies).
+If a package has a /src directory, its contents will be copied to the package root.
 """)
 
 def main():
@@ -275,6 +343,8 @@ def main():
     
     if cmd == "init":
         cmd_init()
+    elif cmd == "update":
+        cmd_update()
     elif cmd == "list":
         # Check for -I flag
         installed_only = len(sys.argv) > 2 and sys.argv[2] == "-I"
