@@ -124,6 +124,11 @@ def cmd_list(installed_only=False):
                         print(f"  Description: {metadata['description']}")
                     if metadata.get('owner'):
                         print(f"  Owner: {metadata['owner']}")
+                    if metadata.get('version'):
+                        print(f"  Version: {metadata['version']}")
+                    if metadata.get('dependencies'):
+                        deps = ', '.join(metadata['dependencies'])
+                        print(f"  Dependencies: {deps}")
             else:
                 print(f"\n{name:30} not installed")
                 # Fetch desc.knit from GitHub
@@ -135,6 +140,9 @@ def cmd_list(installed_only=False):
                         print(f"  Owner: {metadata['owner']}")
                     if metadata.get('version'):
                         print(f"  Version: {metadata['version']}")
+                    if metadata.get('dependencies'):
+                        deps = ', '.join(metadata['dependencies'])
+                        print(f"  Dependencies: {deps}")
 
 def cmd_version():
     """Print the current version of knit"""
