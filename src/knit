@@ -271,6 +271,32 @@ def cmd_init():
                     check=True
                 )
                 print(f"Created {KNIT_DIR} with write permissions for {current_user}")
+                
+                # Add .knittight to PATH
+                home_dir = Path.home()
+                shell_rc = None
+                
+                # Detect shell config file
+                if (home_dir / ".zshrc").exists():
+                    shell_rc = home_dir / ".zshrc"
+                elif (home_dir / ".bashrc").exists():
+                    shell_rc = home_dir / ".bashrc"
+                
+                if shell_rc:
+                    path_line = f'\nexport PATH="{KNIT_DIR}:$PATH"\n'
+                    
+                    # Check if already in PATH
+                    with open(shell_rc, 'r') as f:
+                        content = f.read()
+                    
+                    if KNIT_DIR not in content:
+                        with open(shell_rc, 'a') as f:
+                            f.write(path_line)
+                        print(f"Added {KNIT_DIR} to PATH in {shell_rc}")
+                        print("Run 'source {shell_rc}' or restart your terminal")
+                    else:
+                        print(f"{KNIT_DIR} already in PATH")
+                
             except subprocess.CalledProcessError:
                 print(f"Created {KNIT_DIR} (may need sudo for future operations)")
         else:
