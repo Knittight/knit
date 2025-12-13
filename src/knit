@@ -384,7 +384,7 @@ def main():
             print("Please specify a repo name: knit delete <repo>")
         else:
             cmd_delete(sys.argv[2])
-    elif cmd == "version", "--version":
+    elif cmd == "version" or cmd == "--version":
         cmd_version()
     elif cmd == "help":
         print_help()
