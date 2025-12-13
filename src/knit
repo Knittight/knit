@@ -94,6 +94,8 @@ def cmd_list(installed_only=False):
                 if metadata.get('dependencies'):
                     deps = ', '.join(metadata['dependencies'])
                     print(f"  Dependencies: {deps}")
+                if metadata.get('version'):
+                    print(f"  Version: {metadata['version']}")
     else:
         # Show all available packages
         print(f"Fetching repos from {GITHUB_ORG}...")
