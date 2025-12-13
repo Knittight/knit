@@ -74,7 +74,7 @@ def cmd_list(installed_only=False):
     if installed_only:
         # Only show installed packages
         if not knit_path.exists():
-            print(f"✗ {KNIT_DIR} doesn't exist. Run 'sudo knit init' first.")
+            print(f"{KNIT_DIR} doesn't exist. Run 'sudo knit init' first.")
             return
         
         installed = [d for d in knit_path.iterdir() if d.is_dir() and not d.name.startswith('.')]
@@ -119,7 +119,7 @@ def cmd_list(installed_only=False):
             if repo_path.exists():
                 version = get_repo_version(repo_path)
                 metadata = get_package_metadata(repo_path)
-                status = f"✓ installed (v{version})"
+                status = f" installed (v{version})"
                 
                 print(f"\n{name:30} {status}")
                 if metadata:
@@ -128,7 +128,7 @@ def cmd_list(installed_only=False):
                     if metadata.get('owner'):
                         print(f"  Owner: {metadata['owner']}")
             else:
-                print(f"\n{name:30}   not installed")
+                print(f"\n{name:30} not installed")
                 # Fetch desc.knit from GitHub
                 metadata = get_remote_metadata(name)
                 if metadata:
@@ -145,14 +145,14 @@ def install_dependencies(repo_path):
         return
     
     dependencies = metadata['dependencies']
-    print(f"  Found {len(dependencies)} dependencies: {', '.join(dependencies)}")
+    print(f"Found {len(dependencies)} dependencies: {', '.join(dependencies)}")
     
     for dep in dependencies:
         dep_path = Path(KNIT_DIR) / dep
         if dep_path.exists():
-            print(f"  ✓ {dep} already installed")
+            print(f" {dep} already installed")
         else:
-            print(f"  Installing dependency: {dep}")
+            print(f"Installing dependency: {dep}")
             cmd_install(dep, is_dependency=True)
 
 def cmd_install(repo_name, is_dependency=False):
@@ -167,7 +167,7 @@ def cmd_install(repo_name, is_dependency=False):
     
     if repo_path.exists():
         if not is_dependency:
-            print(f"⚠️  {repo_name} is already installed at {repo_path}")
+            print(f" {repo_name} is already installed at {repo_path}")
             response = input("Update it? (y/n): ")
             if response.lower() != 'y':
                 return
@@ -183,7 +183,7 @@ def cmd_install(repo_name, is_dependency=False):
             if not is_dependency:
                 install_dependencies(repo_path)
         except subprocess.CalledProcessError as e:
-            print(f"✗ Failed to update {repo_name}: {e}")
+            print(f"Failed to update {repo_name}: {e}")
         return
     
     # Clone the repo
@@ -227,7 +227,7 @@ def cmd_delete(repo_name):
     repo_path = knit_path / repo_name
     
     if not repo_path.exists():
-        print(f"✗ {repo_name} is not installed")
+        print(f" {repo_name} is not installed")
         return
     
     print(f"Are you sure you want to delete {repo_name}? (y/n): ", end="")
@@ -236,9 +236,9 @@ def cmd_delete(repo_name):
     if response.lower() == 'y':
         try:
             shutil.rmtree(repo_path)
-            print(f"✓ Deleted {repo_name}")
+            print(f"Deleted {repo_name}")
         except Exception as e:
-            print(f"✗ Failed to delete {repo_name}: {e}")
+            print(f"Failed to delete {repo_name}: {e}")
     else:
         print("Cancelled")
 
@@ -247,7 +247,7 @@ def cmd_init():
     knit_path = Path(KNIT_DIR)
     
     if knit_path.exists():
-        print(f"✓ {KNIT_DIR} already exists")
+        print(f"{KNIT_DIR} already exists")
         return
     
     try:
@@ -266,16 +266,16 @@ def cmd_init():
                     ["chmod", "-R", "755", str(knit_path)],
                     check=True
                 )
-                print(f"✓ Created {KNIT_DIR} with write permissions for {current_user}")
+                print(f"Created {KNIT_DIR} with write permissions for {current_user}")
             except subprocess.CalledProcessError:
-                print(f"✓ Created {KNIT_DIR} (may need sudo for future operations)")
+                print(f"Created {KNIT_DIR} (may need sudo for future operations)")
         else:
-            print(f"✓ Created {KNIT_DIR}")
+            print(f"Created {KNIT_DIR}")
     except PermissionError:
-        print(f"✗ Permission denied. Try running with sudo:")
-        print(f"  sudo knit init")
+        print(f"Permission denied. Try running with sudo:")
+        print(f"sudo knit init")
     except Exception as e:
-        print(f"✗ Failed to create {KNIT_DIR}: {e}")
+        print(f"Failed to create {KNIT_DIR}: {e}")
 
 def cmd_update():
     """Update the knit package manager itself"""
@@ -294,7 +294,7 @@ def cmd_update():
                     break
             
             if not download_url:
-                print("✗ No knit binary found in latest release")
+                print("No knit binary found in latest release")
                 return
             
             print(f"Latest version: {latest_version}")
@@ -314,17 +314,17 @@ def cmd_update():
                     check=True
                 )
                 os.remove(temp_file)
-                print(f"✓ Knit updated to {latest_version}")
-                print("  Run 'knit --version' to verify")
+                print(f"Knit updated to {latest_version}")
+                print("Run 'knit --version' to verify")
             except subprocess.CalledProcessError as e:
-                print(f"✗ Failed to replace knit binary: {e}")
-                print("  You may need to run with sudo")
+                print(f"Failed to replace knit binary: {e}")
+                print("You may need to run with sudo")
                 os.remove(temp_file)
     
     except urllib.error.URLError as e:
-        print(f"✗ Failed to check for updates: {e}")
+        print(f"Failed to check for updates: {e}")
     except Exception as e:
-        print(f"✗ Update failed: {e}")
+        print(f"Update failed: {e}")
 
 def print_help():
     """Print help message"""
@@ -371,18 +371,18 @@ def main():
         cmd_list(installed_only)
     elif cmd == "install":
         if len(sys.argv) < 3:
-            print("✗ Please specify a repo name: knit install <repo>")
+            print("Please specify a repo name: knit install <repo>")
         else:
             cmd_install(sys.argv[2])
     elif cmd == "delete":
         if len(sys.argv) < 3:
-            print("✗ Please specify a repo name: knit delete <repo>")
+            print("Please specify a repo name: knit delete <repo>")
         else:
             cmd_delete(sys.argv[2])
     elif cmd == "help":
         print_help()
     else:
-        print(f"✗ Unknown command: {cmd}")
+        print(f"Unknown command: {cmd}")
         print_help()
 
 if __name__ == "__main__":
