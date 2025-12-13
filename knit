@@ -1,0 +1,299 @@
+#!/usr/bin/env python3
+import os
+import sys
+import json
+import subprocess
+import shutil
+from pathlib import Path
+import urllib.request
+import urllib.error
+
+GITHUB_ORG = "Knittight"
+KNIT_DIR = "/.knittight"
+GITHUB_API = f"https://api.github.com/orgs/{GITHUB_ORG}/repos"
+
+def get_repos():
+    """Fetch all repos from the Knittight organization"""
+    try:
+        with urllib.request.urlopen(GITHUB_API) as response:
+            repos = json.loads(response.read().decode())
+            return repos
+    except urllib.error.URLError as e:
+        print(f"Error fetching repos: {e}")
+        return []
+
+def get_repo_version(repo_path):
+    """Get version from repo's latest git tag"""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_path), "describe", "--tags", "--abbrev=0"],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except:
+        pass
+    
+    return "no tag"
+
+def get_package_metadata(repo_path):
+    """Get package metadata from knit.json"""
+    knit_json = repo_path / "knit.json"
+    
+    if not knit_json.exists():
+        return None
+    
+    try:
+        with open(knit_json, 'r') as f:
+            return json.load(f)
+    except:
+        return None
+
+def cmd_list(installed_only=False):
+    """List all Knittight repos and their installed versions"""
+    knit_path = Path(KNIT_DIR)
+    
+    if installed_only:
+        # Only show installed packages
+        if not knit_path.exists():
+            print(f"✗ {KNIT_DIR} doesn't exist. Run 'sudo knit init' first.")
+            return
+        
+        installed = [d for d in knit_path.iterdir() if d.is_dir() and not d.name.startswith('.')]
+        
+        if not installed:
+            print("No packages installed")
+            return
+        
+        print(f"Installed packages:")
+        print("-" * 80)
+        
+        for repo_path in installed:
+            name = repo_path.name
+            version = get_repo_version(repo_path)
+            metadata = get_package_metadata(repo_path)
+            
+            print(f"\n{name} (v{version})")
+            if metadata:
+                if metadata.get('description'):
+                    print(f"  Description: {metadata['description']}")
+                if metadata.get('owner'):
+                    print(f"  Owner: {metadata['owner']}")
+                if metadata.get('dependencies'):
+                    deps = ', '.join(metadata['dependencies'])
+                    print(f"  Dependencies: {deps}")
+    else:
+        # Show all available packages
+        print(f"Fetching repos from {GITHUB_ORG}...")
+        repos = get_repos()
+        
+        if not repos:
+            print("No repos found or error fetching repos")
+            return
+        
+        print(f"\nAvailable packages from {GITHUB_ORG}:")
+        print("-" * 80)
+        
+        for repo in repos:
+            name = repo["name"]
+            repo_path = knit_path / name
+            
+            if repo_path.exists():
+                version = get_repo_version(repo_path)
+                metadata = get_package_metadata(repo_path)
+                status = f"✓ installed (v{version})"
+                
+                print(f"\n{name:30} {status}")
+                if metadata:
+                    if metadata.get('description'):
+                        print(f"  Description: {metadata['description']}")
+                    if metadata.get('owner'):
+                        print(f"  Owner: {metadata['owner']}")
+            else:
+                print(f"\n{name:30}   not installed")
+                # Try to fetch description from GitHub API
+                if repo.get('description'):
+                    print(f"  Description: {repo['description']}")
+
+def install_dependencies(repo_path):
+    """Install dependencies for a package"""
+    metadata = get_package_metadata(repo_path)
+    
+    if not metadata or not metadata.get('dependencies'):
+        return
+    
+    dependencies = metadata['dependencies']
+    print(f"  Found {len(dependencies)} dependencies: {', '.join(dependencies)}")
+    
+    for dep in dependencies:
+        dep_path = Path(KNIT_DIR) / dep
+        if dep_path.exists():
+            print(f"  ✓ {dep} already installed")
+        else:
+            print(f"  Installing dependency: {dep}")
+            cmd_install(dep, is_dependency=True)
+
+def cmd_install(repo_name, is_dependency=False):
+    """Install (clone) a repo from Knittight organization"""
+    knit_path = Path(KNIT_DIR)
+    repo_path = knit_path / repo_name
+    
+    # Create knittight directory if it doesn't exist
+    if not knit_path.exists():
+        print(f"✗ {KNIT_DIR} doesn't exist. Run 'sudo knit init' first.")
+        return
+    
+    if repo_path.exists():
+        if not is_dependency:
+            print(f"⚠️  {repo_name} is already installed at {repo_path}")
+            response = input("Update it? (y/n): ")
+            if response.lower() != 'y':
+                return
+        print(f"Updating {repo_name}...")
+        try:
+            subprocess.run(
+                ["git", "-C", str(repo_path), "pull"],
+                check=True
+            )
+            print(f"✓ Updated {repo_name}")
+            
+            # Install dependencies after update
+            if not is_dependency:
+                install_dependencies(repo_path)
+        except subprocess.CalledProcessError as e:
+            print(f"✗ Failed to update {repo_name}: {e}")
+        return
+    
+    # Clone the repo
+    repo_url = f"https://github.com/{GITHUB_ORG}/{repo_name}.git"
+    prefix = "  " if is_dependency else ""
+    print(f"{prefix}Installing {repo_name} from {repo_url}...")
+    
+    try:
+        subprocess.run(
+            ["git", "clone", repo_url, str(repo_path)],
+            check=True,
+            capture_output=is_dependency
+        )
+        version = get_repo_version(repo_path)
+        print(f"{prefix}✓ Installed {repo_name} (v{version})")
+        
+        # Install dependencies after successful install
+        if not is_dependency:
+            install_dependencies(repo_path)
+    except subprocess.CalledProcessError as e:
+        print(f"{prefix}✗ Failed to install {repo_name}: {e}")
+        print(f"{prefix}Make sure the repo exists at {repo_url}")
+
+def cmd_delete(repo_name):
+    """Delete an installed repo"""
+    knit_path = Path(KNIT_DIR)
+    repo_path = knit_path / repo_name
+    
+    if not repo_path.exists():
+        print(f"✗ {repo_name} is not installed")
+        return
+    
+    print(f"Are you sure you want to delete {repo_name}? (y/n): ", end="")
+    response = input()
+    
+    if response.lower() == 'y':
+        try:
+            shutil.rmtree(repo_path)
+            print(f"✓ Deleted {repo_name}")
+        except Exception as e:
+            print(f"✗ Failed to delete {repo_name}: {e}")
+    else:
+        print("Cancelled")
+
+def cmd_init():
+    """Initialize .knittight directory in root with proper permissions"""
+    knit_path = Path(KNIT_DIR)
+    
+    if knit_path.exists():
+        print(f"✓ {KNIT_DIR} already exists")
+        return
+    
+    try:
+        knit_path.mkdir(parents=True, exist_ok=True)
+        
+        # Set permissions so current user can write without sudo
+        # Get current user
+        current_user = os.environ.get('SUDO_USER') or os.environ.get('USER')
+        if current_user:
+            try:
+                subprocess.run(
+                    ["chown", "-R", f"{current_user}:{current_user}", str(knit_path)],
+                    check=True
+                )
+                subprocess.run(
+                    ["chmod", "-R", "755", str(knit_path)],
+                    check=True
+                )
+                print(f"✓ Created {KNIT_DIR} with write permissions for {current_user}")
+            except subprocess.CalledProcessError:
+                print(f"✓ Created {KNIT_DIR} (may need sudo for future operations)")
+        else:
+            print(f"✓ Created {KNIT_DIR}")
+    except PermissionError:
+        print(f"✗ Permission denied. Try running with sudo:")
+        print(f"  sudo knit init")
+    except Exception as e:
+        print(f"✗ Failed to create {KNIT_DIR}: {e}")
+
+def print_help():
+    """Print help message"""
+    print("""
+Knit Package Manager - Manage packages from Knittight organization
+
+Usage:
+    knit init                Initialize .knittight directory (requires sudo once)
+    knit list                List all available repos and their versions
+    knit list -I             List only installed packages
+    knit install <repo>      Install (clone) a repo with dependencies
+    knit delete <repo>       Delete an installed repo
+    knit help                Show this help message
+
+Examples:
+    sudo knit init           # Only needed once
+    knit list
+    knit list -I
+    knit install my-package  # No sudo needed after init
+    knit delete my-package
+
+Note: Packages are installed to /.knittight and are accessible system-wide.
+After running 'sudo knit init', you won't need sudo for install/delete.
+""")
+
+def main():
+    if len(sys.argv) < 2:
+        print_help()
+        return
+    
+    cmd = sys.argv[1].lower()
+    
+    if cmd == "init":
+        cmd_init()
+    elif cmd == "list":
+        # Check for -I flag
+        installed_only = len(sys.argv) > 2 and sys.argv[2] == "-I"
+        cmd_list(installed_only)
+    elif cmd == "install":
+        if len(sys.argv) < 3:
+            print("✗ Please specify a repo name: knit install <repo>")
+        else:
+            cmd_install(sys.argv[2])
+    elif cmd == "delete":
+        if len(sys.argv) < 3:
+            print("✗ Please specify a repo name: knit delete <repo>")
+        else:
+            cmd_delete(sys.argv[2])
+    elif cmd == "help":
+        print_help()
+    else:
+        print(f"✗ Unknown command: {cmd}")
+        print_help()
+
+if __name__ == "__main__":
+    main()
