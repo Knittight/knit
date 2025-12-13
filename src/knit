@@ -211,16 +211,16 @@ def cmd_install(repo_name, is_dependency=False):
                 if item.is_file():
                     shutil.copy2(item, dest)
                     
-        # Make executable and symlink to /usr/local/bin
-        os.chmod(dest, 0o755)  # Make it executable
-        bin_link = Path("/usr/local/bin") / item.name
-        try:
-            if bin_link.exists() or bin_link.is_symlink():
-                subprocess.run(["sudo", "rm", str(bin_link)], check=True)
-            subprocess.run(["sudo", "ln", "-s", str(dest), str(bin_link)], check=True)
-            print(f"{prefix}Linked {item.name} to /usr/local/bin")
-        except Exception as e:
-            print(f"{prefix}Could not link {item.name}: {e}")
+                    # Make executable and symlink to /usr/local/bin
+                    os.chmod(dest, 0o755)  # Make it executable
+                    bin_link = Path("/usr/local/bin") / item.name
+                    try:
+                        if bin_link.exists() or bin_link.is_symlink():
+                            subprocess.run(["sudo", "rm", str(bin_link)], check=True)
+                        subprocess.run(["sudo", "ln", "-s", str(dest), str(bin_link)], check=True)
+                        print(f"{prefix}Linked {item.name} to /usr/local/bin")
+                    except Exception as e:
+                        print(f"{prefix}Could not link {item.name}: {e}")
                         
                 elif item.is_dir():
                     if dest.exists():
