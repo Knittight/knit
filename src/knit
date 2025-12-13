@@ -132,6 +132,8 @@ def cmd_list(installed_only=False):
                         print(f"  Description: {metadata['description']}")
                     if metadata.get('owner'):
                         print(f"  Owner: {metadata['owner']}")
+                    if metadata.get('version'):
+                        print(f"  Version: {metadata['version']}")
 
 def install_dependencies(repo_path):
     """Install dependencies for a package"""
