@@ -19,6 +19,10 @@ def get_repos():
     try:
         with urllib.request.urlopen(GITHUB_API) as response:
             repos = json.loads(response.read().decode())
+
+            # Filter out repos starting with "."
+            repos = [repo for repo in repos if not repo.get("name", "").startswith(".")]
+
             return repos
     except urllib.error.URLError as e:
         print(f"Error fetching repos: {e}")
