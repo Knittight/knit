@@ -57,7 +57,6 @@ def cmd_docs(repo_name):
     except Exception as e:
         print(f"Failed to read documentation: {e}")
 
-
 def get_repo_version(repo_path):
     """Get version from desc.knit"""
     metadata = get_package_metadata(repo_path)
@@ -113,7 +112,6 @@ def cmd_update_packages():
             print(f"\n{name} is up-to-date (v{local_version})")
     
     print("\nAll packages checked.")
-
 
 def cmd_list(installed_only=False):
     """List all Knittight repos and their installed versions"""
@@ -201,7 +199,6 @@ def cmd_version():
     """Print the current version of knit"""
     print(f"knit version {KNIT_VERSION}")
 
-
 def install_dependencies(repo_path):
     """Install dependencies for a package"""
     metadata = get_package_metadata(repo_path)
@@ -220,28 +217,36 @@ def install_dependencies(repo_path):
             print(f"Installing dependency: {dep}")
             cmd_install(dep, is_dependency=True)
 
-def cmd_install(repo_name, is_dependency=False):
-    """Install (clone) a repo from Knittight organization"""
+def cmd_install(repo_name, version=None, is_dependency=False):
+    """Install (clone) a repo from Knittight organization (optionally specific version)"""
     knit_path = Path(KNIT_DIR)
     repo_path = knit_path / repo_name
-    
+
     # Create knittight directory if it doesn't exist
     if not knit_path.exists():
         print(f"✗ {KNIT_DIR} doesn't exist. Run 'sudo knit init' first.")
         return
-    
+
+    # Already installed
     if repo_path.exists():
+        if version:
+            print("✗ Cannot install a specific version over an existing install.")
+            print("  Please uninstall first.")
+            return
+
         if not is_dependency:
             print(f" {repo_name} is already installed at {repo_path}")
             response = input("Update it? (y/n): ")
             if response.lower() != 'y':
                 return
+
         print(f"Updating {repo_name}...")
         try:
             subprocess.run(
                 ["git", "-C", str(repo_path), "pull"],
                 check=True
             )
+
             # build step
             build_sh = repo_path / "build.sh"
             makefile = repo_path / "Makefile"
@@ -250,55 +255,70 @@ def cmd_install(repo_name, is_dependency=False):
                 subprocess.run(["sh", "build.sh"], cwd=repo_path, check=True)
             elif makefile.exists():
                 subprocess.run(["make"], cwd=repo_path, check=True)
+
             print(f"✓ Updated {repo_name}")
-            
-            # Install dependencies after update
+
             if not is_dependency:
                 install_dependencies(repo_path)
+
         except subprocess.CalledProcessError as e:
             print(f"Failed to update {repo_name}: {e}")
+
         return
-    
-    # Clone the repo
+
+    # Clone repo
     repo_url = f"https://github.com/{GITHUB_ORG}/{repo_name}.git"
     prefix = "  " if is_dependency else ""
+
     print(f"{prefix}Installing {repo_name} from {repo_url}...")
-    
+
     try:
         subprocess.run(
             ["git", "clone", repo_url, str(repo_path)],
             check=True,
             capture_output=is_dependency
         )
-        
-        # Check if there's a /src directory and copy its contents
+
+        # Checkout specific version (git tag)
+        if version:
+            print(f"{prefix}Checking out version {version}...")
+            subprocess.run(
+                ["git", "-C", str(repo_path), "checkout", f"v{version}"],
+                check=True
+            )
+
+        # Copy /src contents
         src_dir = repo_path / "src"
         if src_dir.exists() and src_dir.is_dir():
             print(f"{prefix}Copying files from /src...")
             for item in src_dir.iterdir():
                 dest = repo_path / item.name
+
                 if item.is_file():
                     shutil.copy2(item, dest)
-                    
-                    # Make executable and symlink to /usr/local/bin
-                    os.chmod(dest, 0o755)  # Make it executable
+                    os.chmod(dest, 0o755)
+
+                    # Symlink to /usr/local/bin
                     bin_link = Path("/usr/local/bin") / item.name
                     try:
                         if bin_link.exists() or bin_link.is_symlink():
                             subprocess.run(["sudo", "rm", str(bin_link)], check=True)
-                        subprocess.run(["sudo", "ln", "-s", str(dest), str(bin_link)], check=True)
+                        subprocess.run(
+                            ["sudo", "ln", "-s", str(dest), str(bin_link)],
+                            check=True
+                        )
                         print(f"{prefix}Linked {item.name} to /usr/local/bin")
                     except Exception as e:
                         print(f"{prefix}Could not link {item.name}: {e}")
-                        
+
                 elif item.is_dir():
                     if dest.exists():
                         shutil.rmtree(dest)
                     shutil.copytree(item, dest)
-        
-        version = get_repo_version(repo_path)
-        print(f"{prefix}✓ Installed {repo_name} (v{version})")
-        
+
+        version_installed = get_repo_version(repo_path)
+        print(f"{prefix}✓ Installed {repo_name} ({version_installed})")
+
         # build step
         build_sh = repo_path / "build.sh"
         makefile = repo_path / "Makefile"
@@ -307,13 +327,13 @@ def cmd_install(repo_name, is_dependency=False):
             subprocess.run(["sh", "build.sh"], cwd=repo_path, check=True)
         elif makefile.exists():
             subprocess.run(["make"], cwd=repo_path, check=True)
-        
-        # Install dependencies after successful install
+
         if not is_dependency:
             install_dependencies(repo_path)
+
     except subprocess.CalledProcessError as e:
         print(f"{prefix}✗ Failed to install {repo_name}: {e}")
-        print(f"{prefix}Make sure the repo exists at {repo_url}")
+        print(f"{prefix}Make sure the repo exists and the version tag is valid")
 
 def cmd_uninstall(repo_name):
     """Delete an installed repo and its symlink"""
@@ -534,9 +554,15 @@ def main():
         cmd_list(installed_only)
     elif cmd == "install":
         if len(sys.argv) < 3:
-            print("Please specify a repo name: knit install <repo>")
+            print("Please specify a repo name: knit install <repo> [-v version]")
         else:
-            cmd_install(sys.argv[2])
+            repo = sys.argv[2]
+            version = None
+
+            if len(sys.argv) >= 5 and sys.argv[3] == "-v":
+                version = sys.argv[4]
+
+            cmd_install(repo, version=version)
     elif cmd == "uninstall":
         if len(sys.argv) < 3:
             print("Please specify a repo name: knit uninstall <repo>")
