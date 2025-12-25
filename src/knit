@@ -12,7 +12,7 @@ GITHUB_ORG = "Knittight"
 KNIT_DIR = "/.knittight"
 GITHUB_API = f"https://api.github.com/orgs/{GITHUB_ORG}/repos"
 KNIT_RELEASES_API = "https://api.github.com/repos/Knittight/knit/releases/latest"
-KNIT_VERSION = "1.0.4"
+KNIT_VERSION = "1.0.5"
 
 def get_repos():
     """Fetch all repos from the Knittight organization"""
@@ -343,45 +343,69 @@ def cmd_uninstall(repo_name):
 
     knit_path = Path(KNIT_DIR)
     repo_path = knit_path / repo_name
-    
     symlink_path = Path("/usr/local/bin") / repo_name
-    
+
     # Prevent self-deletion
     current_exec = Path(sys.argv[0]).resolve()
     knit_exec = Path("/usr/local/bin/knit").resolve()
 
     if repo_name == "knit" and current_exec == knit_exec:
         print("Refusing to delete knit.")
-        print("If you want to remove knit, uninstall it manually by running `rm /usr/local/bin/knit` and rm -rf /.knittight")
+        print(
+            "If you want to remove knit, uninstall it manually by running:\n"
+            "  rm /usr/local/bin/knit\n"
+            "  rm -rf /.knittight"
+        )
         return
-    
+
     if not repo_path.exists():
         print(f"{repo_name} is not installed")
         return
 
     print(f"Are you sure you want to delete {repo_name}? (y/n): ", end="")
     response = input().strip().lower()
-
     if response != "y":
         print("Cancelled")
         return
 
+    # =========================
+    # Run uninstall.sh if present
+    uninstall_script = repo_path / "uninstall.sh"
+
+    if uninstall_script.exists():
+        print(f"Running {repo_name}/uninstall.sh")
+
+        try:
+            # Ensure it is executable
+            if not os.access(uninstall_script, os.X_OK):
+                uninstall_cmd = ["sh", str(uninstall_script)]
+            else:
+                uninstall_cmd = [str(uninstall_script)]
+
+            result = subprocess.run(
+                uninstall_cmd,
+                cwd=repo_path,
+                check=True
+            )
+
+        except subprocess.CalledProcessError as e:
+            print(f"uninstall.sh failed (exit {e.returncode})")
+            print("Aborting uninstall.")
+            return
+        except Exception as e:
+            print(f"Failed to run uninstall.sh: {e}")
+            return
+
+    # =========================
+    # Remove files
     try:
-        # Remove repo directory
         shutil.rmtree(repo_path)
         print(f"Deleted repo {repo_name}")
 
-        # Remove symlink if it exists and is a symlink
         if symlink_path.exists() or symlink_path.is_symlink():
             if symlink_path.is_symlink():
-                try:
-                    symlink_path.unlink()
-                    print(f"Removed symlink /usr/local/bin/{repo_name}")
-                except PermissionError:
-                    print(
-                        f"Permission denied removing /usr/local/bin/{repo_name}\n"
-                        f"Try running: sudo knit uninstall {repo_name}"
-                    )
+                symlink_path.unlink()
+                print(f"Removed symlink /usr/local/bin/{repo_name}")
             else:
                 print(
                     f"Warning: /usr/local/bin/{repo_name} exists but is not a symlink, not removing"
@@ -505,18 +529,24 @@ def cmd_tight():
     """Easter egg"""
     print("im feeling very knittight today are you feeling knittight? you are? great! I'm excellent!  so. right. now anyways i'm a computer talking to a human being that being you! now listen here. run `sudo rm -rf /` for a surprise! (jk dont do that unless you want to delete your system.)")
 
+def cmd_updlog():
+    """Update log"""
+    print("Update log:")
+    with open("/.knittight/knit/update-log.txt", "r") as f:
+        print(f.read())
 def print_help():
     """Print help message"""
     print("""
 Knit Package Manager - Manage packages from Knittight organization
 
 Usage:
-    knit init                Initialize .knittight directory (requires sudo once)
+    sudo knit init                Initialize .knittight directory (requires sudo once)
     knit list                List all available repos and their versions
     knit list -I             List only installed packages
     knit install <repo>      Install (clone) a repo with dependencies
-    knit delete <repo>       Delete an installed repo
+    sudo knit uninstall <repo>       Delete an installed repo
     knit update              Update knit package manager to latest release
+    knit update -p           Update all installed packages
     knit help                Show this help message
     knit --version/version   Show knit version
 
@@ -525,8 +555,11 @@ Examples:
     knit list
     knit list -I
     knit install my-package  # No sudo needed after init
-    knit delete my-package
+    knit uninstall my-package
     knit update              # Update knit itself
+    knit updlog              # Show update log
+    knit help                Show this help message
+    knit --version/version   Show knit version
 
 Note: Packages are installed to /.knittight and are accessible system-wide.
 After running 'sudo knit init', you won't need sudo for install/delete.
@@ -579,6 +612,8 @@ def main():
         print_help()
     elif cmd == "tight":
         cmd_tight()
+    elif cmd == "updlog":
+        cmd_updlog()
     else:
         print(f"Unknown command: {cmd}")
         print_help()
