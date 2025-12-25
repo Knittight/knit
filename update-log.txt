@@ -1,0 +1,5 @@
+[1.0.5 Blue Jay] 
+1) added updlog
+2) updated help menu
+3) fixed install instructions
+4) added uninstall.sh support to make deleting loom not a chore and uh bird
