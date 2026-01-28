@@ -3,5 +3,9 @@
   "version": "1.0.5",
   "description": "package manager for Knittight [github] repositories",
   "owner": "Knittight",
-  "dependencies": []
+  "dependencies": [
+    "apt:python3",
+    "pacman:python",
+    "dnf:python3"
+  ]
 }

@@ -210,12 +210,54 @@ def install_dependencies(repo_path):
     print(f"Found {len(dependencies)} dependencies: {', '.join(dependencies)}")
     
     for dep in dependencies:
+        # Check for package manager prefix
+        if ':' in dep:
+            manager, package = dep.split(':', 1)
+            install_system_package(manager, package)
+            continue
+
         dep_path = Path(KNIT_DIR) / dep
         if dep_path.exists():
             print(f" {dep} already installed")
         else:
             print(f"Installing dependency: {dep}")
             cmd_install(dep, is_dependency=True)
+
+def install_system_package(manager, package):
+    """Install a system package using the specified manager"""
+    
+    # Check if manager exists
+    if not shutil.which(manager) and not (manager == "apt" and shutil.which("apt-get")):
+        # Fail silently/skip if manager not found (allows for cross-platform dependency lists)
+        return
+
+    print(f"Installing system package '{package}' using {manager}...")
+    
+    try:
+        if manager == "apt":
+            subprocess.run(["sudo", "apt-get", "install", "-y", package], check=True)
+        elif manager == "pacman":
+            subprocess.run(["sudo", "pacman", "-S", "--noconfirm", package], check=True)
+        elif manager == "dnf":
+            subprocess.run(["sudo", "dnf", "install", "-y", package], check=True)
+        elif manager == "zypper":
+            subprocess.run(["sudo", "zypper", "install", "-y", package], check=True)
+        elif manager == "brew":
+            subprocess.run(["brew", "install", package], check=True)
+        elif manager == "apk":
+            subprocess.run(["sudo", "apk", "add", package], check=True)
+        elif manager == "yum":
+            subprocess.run(["sudo", "yum", "install", "-y", package], check=True)
+        elif manager == "pip":
+            subprocess.run(["pip3", "install", package], check=True)
+        else:
+            print(f"Warning: Unknown package manager '{manager}'")
+            return
+
+        print(f"✓ Installed {package}")
+        
+    except subprocess.CalledProcessError:
+        print(f"✗ Failed to install {package} with {manager}")
 
 def cmd_install(repo_name, version=None, is_dependency=False):
     """Install (clone) a repo from Knittight organization (optionally specific version)"""
