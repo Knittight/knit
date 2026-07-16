@@ -7,3 +7,4 @@
 [1.0.5-m1]
 1) fixed package manager bug
 2) renamed snap to chrono because of stupid ubuntu already having something called snap
+3) added pip package installation support/venv creation by passing -p on certain packages with knit install

@@ -203,6 +203,19 @@ def install_dependencies(repo_path):
     """Install dependencies for a package"""
     metadata = get_package_metadata(repo_path)
     
+    
+    if metadata and metadata.get('pip_packages'):
+        pips = metadata['pip_packages']
+        print(f"Found {len(pips)} pip packages: {', '.join(pips)}")
+        venv_path = Path(KNIT_DIR) / ".venv"
+        install_pip_reqs = pips
+        if install_pip_reqs:
+            if not venv_path.exists():
+                print(f"Shared venv not found. Run 'sudo knit init' first.")
+                return
+            pip_exe = venv_path / "bin" / "pip"
+            subprocess.run([str(pip_exe), "install"] + install_pip_reqs, check=True)
+
     if not metadata or not metadata.get('dependencies'):
         return
     
@@ -259,8 +272,9 @@ def install_system_package(manager, package):
     except subprocess.CalledProcessError:
         print(f"✗ Failed to install {package} with {manager}")
 
-def cmd_install(repo_name, version=None, is_dependency=False):
+def cmd_install(repo_name, version=None, is_dependency=False, pip_packages=None):
     """Install (clone) a repo from Knittight organization (optionally specific version)"""
+    pip_packages = pip_packages or []
     knit_path = Path(KNIT_DIR)
     repo_path = knit_path / repo_name
 
@@ -303,6 +317,16 @@ def cmd_install(repo_name, version=None, is_dependency=False):
             if not is_dependency:
                 install_dependencies(repo_path)
 
+            if pip_packages:
+                print(f"Installing additional pip packages...")
+                venv_path = Path(KNIT_DIR) / ".venv"
+                if not venv_path.exists():
+                    print(f"Shared venv not found. Run 'sudo knit init' first.")
+                    return
+                pip_exe = venv_path / "bin" / "pip"
+                subprocess.run([str(pip_exe), "install"] + pip_packages, check=True)
+                print(f"✓ Installed pip packages: {', '.join(pip_packages)}")
+
         except subprocess.CalledProcessError as e:
             print(f"Failed to update {repo_name}: {e}")
 
@@ -340,6 +364,15 @@ def cmd_install(repo_name, version=None, is_dependency=False):
                     shutil.copy2(item, dest)
                     os.chmod(dest, 0o755)
 
+                    # Add to knittight group
+                    try:
+                        subprocess.run(
+                            ["sudo", "chgrp", "knittight", str(dest)],
+                            check=True
+                        )
+                    except subprocess.CalledProcessError:
+                        pass
+
                     # Symlink to /usr/local/bin
                     bin_link = Path("/usr/local/bin") / item.name
                     try:
@@ -372,6 +405,16 @@ def cmd_install(repo_name, version=None, is_dependency=False):
 
         if not is_dependency:
             install_dependencies(repo_path)
+
+        if pip_packages:
+            print(f"{prefix}Installing pip packages to shared venv...")
+            venv_path = Path(KNIT_DIR) / ".venv"
+            if not venv_path.exists():
+                print(f"{prefix}Shared venv not found. Run 'sudo knit init' first.")
+                return
+            pip_exe = venv_path / "bin" / "pip"
+            subprocess.run([str(pip_exe), "install"] + pip_packages, check=True)
+            print(f"{prefix}✓ Installed pip packages: {', '.join(pip_packages)}")
 
     except subprocess.CalledProcessError as e:
         print(f"{prefix}✗ Failed to install {repo_name}: {e}")
@@ -481,7 +524,42 @@ def cmd_init():
                     check=True
                 )
                 print(f"Created {KNIT_DIR} with write permissions for {current_user}")
-                
+
+                # Create knittight group
+                try:
+                    subprocess.run(
+                        ["groupadd", "-f", "knittight"],
+                        check=True
+                    )
+                    subprocess.run(
+                        ["usermod", "-aG", "knittight", current_user],
+                        check=True
+                    )
+                    print(f"Created 'knittight' group and added {current_user}")
+                except subprocess.CalledProcessError:
+                    print("Could not create knittight group (may already exist)")
+
+                # Create shared .venv for Knittight programs
+                venv_path = knit_path / ".venv"
+                try:
+                    subprocess.run(
+                        ["python3", "-m", "venv", str(venv_path)],
+                        check=True
+                    )
+                    subprocess.run(
+                        ["chown", "-R", f"{current_user}:knittight", str(venv_path)],
+                        check=True
+                    )
+                    subprocess.run(
+                        ["chmod", "-R", "700", str(venv_path)],
+                        check=True
+                    )
+                    print(f"Created {KNIT_DIR}/.venv for Knittight programs")
+                except subprocess.CalledProcessError:
+                    print("Could not create .venv (python3 may not be installed)")
+                except FileNotFoundError:
+                    print("Could not create .venv (python3 not found)")
+
                 # Add .knittight to PATH
                 home_dir = Path.home()
                 shell_rc = None
@@ -585,7 +663,7 @@ Usage:
     sudo knit init                Initialize .knittight directory (requires sudo once)
     knit list                List all available repos and their versions
     knit list -I             List only installed packages
-    knit install <repo>      Install (clone) a repo with dependencies
+    knit install <repo> [-v version] [-p pkg...]      Install (clone) a repo with dependencies and optional venv pip packages
     sudo knit uninstall <repo>       Delete an installed repo
     knit update              Update knit package manager to latest release
     knit update -p           Update all installed packages
@@ -597,6 +675,7 @@ Examples:
     knit list
     knit list -I
     knit install my-package  # No sudo needed after init
+    knit install my-package -p requests flask # Make a venv and pip install these
     knit uninstall my-package
     knit update              # Update knit itself
     knit updlog              # Show update log
@@ -606,6 +685,8 @@ Examples:
 Note: Packages are installed to /.knittight and are accessible system-wide.
 After running 'sudo knit init', you won't need sudo for install/delete.
 Packages use desc.knit files for metadata (description, owner, dependencies).
+init also creates a shared /.knittight/.venv (exclusive to the knittight group)
+and a 'knittight' group for access control.
 If a package has a /src directory, its contents will be copied to the package root.
 """)
 
@@ -629,15 +710,24 @@ def main():
         cmd_list(installed_only)
     elif cmd == "install":
         if len(sys.argv) < 3:
-            print("Please specify a repo name: knit install <repo> [-v version]")
+            print("Please specify a repo name: knit install <repo> [-v version] [-p pkg1 pkg2 ...]")
         else:
             repo = sys.argv[2]
             version = None
+            pip_packages = None
 
-            if len(sys.argv) >= 5 and sys.argv[3] == "-v":
-                version = sys.argv[4]
+            i = 3
+            while i < len(sys.argv):
+                if sys.argv[i] == "-v" and i + 1 < len(sys.argv):
+                    version = sys.argv[i+1]
+                    i += 2
+                elif sys.argv[i] == "-p":
+                    pip_packages = sys.argv[i+1:]
+                    break
+                else:
+                    i += 1
 
-            cmd_install(repo, version=version)
+            cmd_install(repo, version=version, pip_packages=pip_packages)
     elif cmd == "uninstall":
         if len(sys.argv) < 3:
             print("Please specify a repo name: knit uninstall <repo>")
