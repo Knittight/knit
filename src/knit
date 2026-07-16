@@ -262,7 +262,12 @@ def install_system_package(manager, package):
         elif manager == "yum":
             subprocess.run(["sudo", "yum", "install", "-y", package], check=True)
         elif manager == "pip":
-            subprocess.run(["pip3", "install", package], check=True)
+            venv_path = Path(KNIT_DIR) / ".venv"
+            pip_exe = venv_path / "bin" / "pip"
+            if not pip_exe.exists():
+                print(f"✗ Shared venv not found. Run 'sudo knit init' first.")
+                return
+            subprocess.run([str(pip_exe), "install", package], check=True)
         else:
             print(f"Warning: Unknown package manager '{manager}'")
             return
